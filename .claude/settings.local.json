@@ -1,0 +1,23 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx create-next-app@latest . --typescript --tailwind --app --src-dir --import-alias \"@/*\" --yes)",
+      "Bash(npx create-next-app@latest:*)",
+      "Bash(npm install:*)",
+      "Bash(npx prisma init --datasource-provider sqlite)",
+      "Bash(npx prisma db push:*)",
+      "Bash(npm run build)",
+      "WebFetch(domain:develop-docs.second.me)",
+      "Bash(npx tsc:*)",
+      "Bash(openspec new change:*)",
+      "Bash(openspec status:*)",
+      "Bash(openspec instructions proposal --change \"a2a-collaboration-discovery\" --json)",
+      "Bash(openspec instructions design:*)",
+      "Bash(openspec instructions:*)",
+      "Bash(npx prisma generate)",
+      "Bash(openspec list:*)",
+      "WebFetch(domain:minimax-algeng-chat-tts.oss-cn-wulanchabu.aliyuncs.com)",
+      "Bash(DATABASE_URL=\"postgresql://postgres.rmrjmuizcyjqizmarfcx:fishingrodzsl851892190@aws-1-ap-northeast-1.pooler.supabase.com:5432/postgres\" npx prisma db push --skip-generate)"
+    ]
+  }
+}

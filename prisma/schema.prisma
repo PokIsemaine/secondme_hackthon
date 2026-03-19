@@ -1,0 +1,175 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// 用户表 - 必含 Token 字段
+model User {
+  id              String    @id @default(cuid())
+  secondmeUserId  String    @unique @map("secondme_user_id")
+  nickname        String?
+  avatarUrl       String?   @map("avatar_url")
+  accessToken     String    @map("access_token")
+  refreshToken    String    @map("refresh_token")
+  tokenExpiresAt  DateTime  @map("token_expires_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  // 用户画像 - 互补分析
+  longboardTags   String?   @map("longboard_tags")    // 我的长板
+  blindspotTags   String?   @map("blindspot_tags")    // 我的短板
+  offerTags       String?   @map("offer_tags")       // 我能提供的
+  needTags        String?   @map("need_tags")        // 我想获得的
+  cooperationPref String?  @map("cooperation_pref") // 合作偏好
+
+  // 新增：完整分身画像 JSON
+  profileJson      String?   @map("profile_json")
+
+  // 关联
+  sessions        Session[]
+  notes           Note[]
+  proposals       Proposal[] @relation("ProposalInitiator")
+  negotiations    NegotiationSession[]
+
+  @@map("users")
+}
+
+// 聊天会话
+model Session {
+  id          String   @id @default(cuid())
+  userId      String   @map("user_id")
+  title       String?
+  messages    Message[]
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+// 聊天消息
+model Message {
+  id          String   @id @default(cuid())
+  sessionId   String   @map("session_id")
+  role        String   // "user" | "assistant"
+  content     String
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  session     Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@map("messages")
+}
+
+// 笔记
+model Note {
+  id          String   @id @default(cuid())
+  userId      String   @map("user_id")
+  content     String
+  source      String?  // 来源，如 "chat", "manual"
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("notes")
+}
+
+// 知乎圈子内容
+model RingContent {
+  id          String   @id @default(cuid())
+  ringId      String   @map("ring_id")
+  contentToken String  @map("content_token")
+  title       String
+  content     String?
+  authorName  String?  @map("author_name")
+  likeNum     Int?     @map("like_num")
+  commentNum  Int?     @map("comment_num")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@map("ring_contents")
+}
+
+// 协作提案
+model Proposal {
+  id              String   @id @default(cuid())
+  initiatorId     String   @map("initiator_id")
+  targetUserId    String?  @map("target_user_id")
+  contextToken    String?  @map("context_token")
+  complementReason String? @map("complement_reason")
+  offerSummary    String?  @map("offer_summary")
+  needSummary     String?  @map("need_summary")
+  collaborationType String? @map("collaboration_type")
+  status          String   @default("pending") // pending, accepted, rejected, expired
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  initiator       User     @relation("ProposalInitiator", fields: [initiatorId], references: [id], onDelete: Cascade)
+
+  @@map("proposals")
+}
+
+// A2A 协商会话
+model NegotiationSession {
+  id              String   @id @default(cuid())
+  initiatorId     String   @map("initiator_id")
+  targetUserToken String?  @map("target_user_token")  // 对方用户 token（可选，未登录时为空）
+  mode            String   @default("semi_a2a")        // semi_a2a | full_a2a
+  topic           String?                          // 协商主题
+  status          String   @default("pending")        // pending | in_progress | completed | cancelled
+
+  // 共识与分歧
+  consensus       String?                          // 共识摘要
+  disagreements   String?                          // 分歧点
+  recommendedForm String?  @map("recommended_form") // 推荐合作形式
+  recommendedDuration String? @map("recommended_duration") // 建议时长
+  shouldContinue  Boolean? @map("should_continue") // 是否建议真人接入
+
+  // 候选代理画像（用于半自动协商）
+  peerProxyData   Json?   @map("peer_proxy_data")
+
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  initiator       User     @relation(fields: [initiatorId], references: [id], onDelete: Cascade)
+  rounds          NegotiationRound[]
+
+  @@map("negotiation_sessions")
+}
+
+// 协商轮次
+model NegotiationRound {
+  id             String   @id @default(cuid())
+  sessionId      String   @map("session_id")
+  roundNumber    Int      @map("round_number")
+  speaker        String   // my_agent | peer_agent | peer_proxy
+  content        String   // 发言内容
+  summary        String?  // 摘要
+
+  session        NegotiationSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@map("negotiation_rounds")
+}
+
+// 候选代理画像
+model CandidateProxy {
+  id              String   @id @default(cuid())
+  targetToken     String   @unique @map("target_token") // 对方在知乎的 token
+  sourcePosts     String?  @map("source_posts")         // 来源帖子 ID 列表 JSON
+  estimatedStrengths String? @map("estimated_strengths") // 推断长板
+  estimatedNeeds  String?  @map("estimated_needs")      // 推断需求
+  estimatedOffers String?  @map("estimated_offers")     // 推断能提供的价值
+  communicationStyle String? @map("communication_style") // 沟通风格
+  confidence      Float    @default(0.5)                // 可信度
+
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  @@map("candidate_proxies")
+}
