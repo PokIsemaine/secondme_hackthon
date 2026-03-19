@@ -23,7 +23,7 @@ export async function POST(request: Request) {
 
     // 检查是否已有现成的候选代理
     const existingProxy = await prisma.candidateProxy.findUnique({
-      where: { targetToken },
+      where: { targetToken: String(targetToken) },
     })
 
     if (existingProxy) {
@@ -148,7 +148,7 @@ ${posts.map((p, i) => `${i + 1}. ${p.content.substring(0, 200)}`).join('\n\n')}
     // 创建候选代理
     const proxy = await prisma.candidateProxy.create({
       data: {
-        targetToken,
+        targetToken: String(targetToken),
         sourcePosts: JSON.stringify(posts.map(p => p.content.substring(0, 100))),
         estimatedStrengths: analysis.estimated_strengths,
         estimatedNeeds: analysis.estimated_needs,

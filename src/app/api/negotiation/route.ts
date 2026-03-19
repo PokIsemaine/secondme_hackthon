@@ -1,79 +1,6 @@
 import { NextResponse } from 'next/server'
-import { getCurrentUserId, getAuthConfig, callSecondMeApi } from '@/lib/auth'
+import { getCurrentUserId } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-
-// 5 轮协商 Prompt 模板
-const NEGOTIATION_PROMPTS = {
-  round1_defineProblem: (topic: string, myProfile: any, peerProfile: any) => `
-你正在代表用户 A 与用户 B（或候选代理）进行协作协商。
-
-## 用户 A 信息
-- 擅长领域: ${myProfile.strengths || '未设置'}
-- 需要帮助: ${myProfile.needs || '未设置'}
-- 能提供: ${myProfile.offers || '未设置'}
-- 合作边界: ${myProfile.boundary || '未设置'}
-
-## 用户 B / 候选代理信息
-- 估计擅长: ${peerProfile.strengths || '未知'}
-- 估计需求: ${peerProfile.needs || '未知'}
-- 估计能提供: ${peerProfile.offers || '未知'}
-
-## 协商主题
-${topic}
-
-## 第 1 轮：定义问题
-请明确当前要解决的具体问题是什么。用 1-2 句话简洁描述。
-
-输出格式：
-{"summary": "问题描述", "content": "完整发言内容"}
-`,
-
-  round2_exchangeValue: (myProfile: any, peerProfile: any) => `
-## 第 2 轮：交换价值
-请说明你能为对方提供什么价值，以及你希望从对方获得什么。
-
-用户 A 能提供: ${myProfile.offers || '未设置'}
-用户 A 需要: ${myProfile.needs || '未设置'}
-
-用户 B 能提供: ${peerProfile.offers || '未知'}
-用户 B 需要: ${peerProfile.needs || '未知'}
-
-输出格式：
-{"summary": "价值交换摘要", "content": "完整发言内容"}
-`,
-
-  round3_confirmBoundary: (myProfile: any, peerProfile: any) => `
-## 第 3 轮：确认边界
-请明确各方的合作边界和限制条件。
-
-用户 A 边界: ${myProfile.boundary || '未设置'}
-用户 B 边界: ${peerProfile.boundary || '未知'}
-
-输出格式：
-{"summary": "边界确认摘要", "content": "完整发言内容"}
-`,
-
-  round4_designMinCollaboration: () => `
-## 第 4 轮：设计最低成本合作形式
-基于前面的讨论，请提出一个最小可执行的协作形式。
-
-考虑：
-- 最小时间投入
-- 最小承诺
-- 最有价值的验证点
-
-输出格式：
-{"summary": "最小合作形式", "content": "完整发言内容"}
-`,
-
-  round5_recommend: () => `
-## 第 5 轮：建议继续或终止
-综合以上讨论，请给出是否建议真人继续投入的建议。
-
-输出格式：
-{"summary": "建议摘要", "shouldContinue": true/false, "reason": "原因", "content": "完整发言内容"}
-`
-}
 
 // POST /api/negotiation - 创建协商会话
 export async function POST(request: Request) {
@@ -87,7 +14,16 @@ export async function POST(request: Request) {
     const { targetUserToken, topic, peerProxyData } = body as {
       targetUserToken?: string
       topic: string
-      peerProxyData?: any
+      peerProxyData?: {
+        authorName?: string
+        postContent?: string
+        ringName?: string
+        topic?: string
+        estimatedStrengths?: string
+        estimatedNeeds?: string
+        estimatedOffers?: string
+        communicationStyle?: string
+      }
     }
 
     if (!topic) {
@@ -111,7 +47,7 @@ export async function POST(request: Request) {
         mode,
         topic,
         status: 'pending',
-        peerProxyData: peerProxyData || null,
+        peerProxyData: peerProxyData ?? undefined,
       },
     })
 

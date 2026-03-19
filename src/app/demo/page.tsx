@@ -29,6 +29,14 @@ interface CirclePost {
   like_num: number
   comment_num: number
   ringName?: string
+  topic?: string
+  title?: string
+}
+
+interface RingMeta {
+  name: string
+  ringId: string
+  memberCount: number
 }
 
 interface MatchResult {
@@ -86,6 +94,12 @@ export default function DemoPage() {
   const [streamingRounds, setStreamingRounds] = useState<NegotiationRound[]>([])
   const [ringStyles, setRingStyles] = useState<Record<string, { bg: string; text: string }>>({})
 
+  // Per-panel state for dual-circle split view
+  const [ringPosts, setRingPosts] = useState<Record<string, CirclePost[]>>({})
+  const [ringLoading, setRingLoading] = useState<Record<string, boolean>>({})
+  const [ringErrors, setRingErrors] = useState<Record<string, string>>({})
+  const [ringMeta, setRingMeta] = useState<Record<string, RingMeta>>({})
+
   // API 加载状态
   const [loadingStep, setLoadingStep] = useState<string | null>(null)
 
@@ -102,8 +116,8 @@ export default function DemoPage() {
       if (data.code === 0 && data.data) {
         setProfile(data.data)
         setDemoMode(false)
-        // 如果还没有画像，自动触发生成 + 轮询
-        if (!data.data.has_profile) {
+        // 如果还没有画像或缺少分身自我介绍，自动触发生成 + 轮询
+        if (!data.data.has_profile || !data.data.profile?.naturalLanguagePreview) {
           triggerAutoGenerate()
         }
       }
@@ -114,36 +128,20 @@ export default function DemoPage() {
     }
   }
 
-  // 触发自动画像生成并轮询直到完成
+  // 触发自动画像生成
   const triggerAutoGenerate = async () => {
     setIsAutoGenerating(true)
-    setPollCount(0)
     try {
-      await fetch('/api/user/profile/generate', { method: 'POST' })
-    } catch (e) {
-      console.error('Auto generate error:', e)
-    }
-    pollProfile()
-  }
-
-  const pollProfile = async () => {
-    if (pollCount >= 10) {
-      setIsAutoGenerating(false)
-      return
-    }
-    try {
-      const res = await fetch('/api/user/profile')
+      const res = await fetch('/api/user/profile', { method: 'POST' })
       const data = await res.json()
-      if (data.code === 0 && data.data?.has_profile) {
+      if (data.code === 0) {
         setProfile(data.data)
-        setIsAutoGenerating(false)
-        return
       }
     } catch (e) {
-      console.error('Poll profile error:', e)
+      console.error('Auto generate error:', e)
+    } finally {
+      setIsAutoGenerating(false)
     }
-    setPollCount(c => c + 1)
-    setTimeout(pollProfile, 3000)
   }
 
   // Step 1: 加载用户画像
@@ -203,9 +201,39 @@ export default function DemoPage() {
 
     if (demoMode) {
       setPosts(mockCirclePosts)
+      // Populate ringPosts for demo mode
+      const demoRingPosts: Record<string, CirclePost[]> = {}
+      const demoRings: RingMeta[] = [
+        { name: '产品经理', ringId: '2001009660925334090', memberCount: 0 },
+        { name: '互联网职场', ringId: '2015023739549529606', memberCount: 0 },
+      ]
+      const demoMeta: Record<string, RingMeta> = {}
+      const demoStyles: Record<string, { bg: string; text: string }> = {}
+      const demoColors = [
+        { bg: 'bg-blue-100', text: 'text-blue-700' },
+        { bg: 'bg-purple-100', text: 'text-purple-700' },
+      ]
+      demoRings.forEach((ring, idx) => {
+        demoRingPosts[ring.ringId] = (mockCirclePosts as CirclePost[]).filter(p => p.ringName === ring.name)
+        demoMeta[ring.ringId] = ring
+        demoStyles[ring.name] = demoColors[idx % demoColors.length]
+      })
+      setRingPosts(demoRingPosts)
+      setRingMeta(demoMeta)
+      setRingStyles(demoStyles)
       setLoadingStep(null)
       return
     }
+
+    // Initialize all rings as loading
+    const initialLoading: Record<string, boolean> = {}
+    const initialErrors: Record<string, string> = {}
+    RING_IDS.forEach(id => {
+      initialLoading[id] = true
+      initialErrors[id] = ''
+    })
+    setRingLoading(initialLoading)
+    setRingErrors(initialErrors)
 
     try {
       // 并行拉取两个圈子的帖子
@@ -216,50 +244,104 @@ export default function DemoPage() {
       )
 
       const allPosts: CirclePost[] = []
-      const discoveredRings: Array<{ name: string; id: string }> = []
       const ringColors = [
         { bg: 'bg-blue-100', text: 'text-blue-700' },
         { bg: 'bg-purple-100', text: 'text-purple-700' },
       ]
+      const newRingPosts: Record<string, CirclePost[]> = {}
+      const newRingMeta: Record<string, RingMeta> = {}
+      const newStyles: Record<string, { bg: string; text: string }> = {}
+      const newLoading: Record<string, boolean> = {}
+      const newErrors: Record<string, string> = {}
+      let styleIdx = 0
+
+      for (const ringId of RING_IDS) {
+        newLoading[ringId] = false
+        newErrors[ringId] = ''
+      }
 
       for (const result of results) {
         if (result.status === 'fulfilled' && result.value.code === 0) {
           const ringName = result.value.data?.ring_info?.ring_name || ''
           const ringId = result.value.data?.ring_info?.ring_id || ''
+          const membershipNum = result.value.data?.ring_info?.membership_num || 0
           const posts = result.value.data?.contents || []
-          if (ringName && !discoveredRings.find(r => r.name === ringName)) {
-            discoveredRings.push({ name: ringName, id: ringId })
-          }
-          // 标注每条帖子的圈子名称
-          for (const post of posts) {
-            allPosts.push({ ...post, ringName })
+
+          if (ringName && ringId) {
+            const color = ringColors[styleIdx % ringColors.length]
+            newStyles[ringName] = color
+            newRingMeta[ringId] = { name: ringName, ringId, memberCount: membershipNum }
+            newRingPosts[ringId] = (posts as CirclePost[]).map(p => ({ ...p, ringName }))
+            allPosts.push(...newRingPosts[ringId])
+            styleIdx++
           }
         } else if (result.status === 'rejected') {
+          const ringId = RING_IDS[results.indexOf(result)]
+          newErrors[ringId] = '加载失败，请重试'
+          newLoading[ringId] = false
           console.error('Circle fetch rejected:', result.reason)
         } else if (result.status === 'fulfilled' && result.value.code !== 0) {
+          const ringId = RING_IDS[results.indexOf(result)]
+          newErrors[ringId] = result.value.message || '加载失败，请重试'
+          newLoading[ringId] = false
           console.error('Circle fetch error:', result.value.message)
         }
       }
 
-      // 构建圈子颜色映射
-      const styles: Record<string, { bg: string; text: string }> = {}
-      discoveredRings.forEach((ring, idx) => {
-        const color = ringColors[idx % ringColors.length]
-        styles[ring.name] = color
-      })
-      setRingStyles(styles)
+      setRingStyles(newStyles)
+      setRingMeta(newRingMeta)
+      setRingPosts(newRingPosts)
+      setRingLoading(newLoading)
+      setRingErrors(newErrors)
 
       // 按 pin_id 去重
       const uniquePosts = allPosts.filter((post, idx, arr) =>
         arr.findIndex(p => p.pin_id === post.pin_id) === idx
       )
-
       setPosts(uniquePosts)
     } catch (e) {
       console.error('Load circle error:', e)
+      RING_IDS.forEach(id => {
+        setRingErrors(prev => ({ ...prev, [id]: '加载失败，请重试' }))
+        setRingLoading(prev => ({ ...prev, [id]: false }))
+      })
       setPosts(mockCirclePosts)
     } finally {
       setLoadingStep(null)
+    }
+  }
+
+  // Per-panel refresh: re-fetch a single circle's posts
+  const refreshRing = async (ringId: string) => {
+    setRingLoading(prev => ({ ...prev, [ringId]: true }))
+    setRingErrors(prev => ({ ...prev, [ringId]: '' }))
+
+    try {
+      const res = await fetch(`/api/zhihu/ring?ring_id=${ringId}&page_num=1&page_size=10`)
+      const data = await res.json()
+
+      if (data.code === 0) {
+        const ringName = data.data?.ring_info?.ring_name || ''
+        const posts = data.data?.contents || []
+        const memberCount = data.data?.ring_info?.membership_num || 0
+
+        setRingPosts(prev => ({
+          ...prev,
+          [ringId]: (posts as CirclePost[]).map(p => ({ ...p, ringName })),
+        }))
+        setRingMeta(prev => ({
+          ...prev,
+          [ringId]: { name: ringName, ringId, memberCount },
+        }))
+        setRingErrors(prev => ({ ...prev, [ringId]: '' }))
+      } else {
+        setRingErrors(prev => ({ ...prev, [ringId]: data.message || '加载失败，请重试' }))
+      }
+    } catch (e) {
+      console.error('Refresh ring error:', e)
+      setRingErrors(prev => ({ ...prev, [ringId]: '加载失败，请重试' }))
+    } finally {
+      setRingLoading(prev => ({ ...prev, [ringId]: false }))
     }
   }
 
@@ -279,6 +361,9 @@ export default function DemoPage() {
       return
     }
 
+    // Flatten ringPosts back to CirclePost[] for AI match
+    const allPosts: CirclePost[] = Object.values(ringPosts).flat()
+
     try {
       console.log('[AI Match] Starting match request...')
       const res = await fetch('/api/circle/match', {
@@ -290,7 +375,7 @@ export default function DemoPage() {
             soft_memories: profile.soft_memories || [],
             bio: profile.bio,
           },
-          posts: posts.map(p => ({
+          posts: allPosts.map(p => ({
             pin_id: p.pin_id,
             content: p.content,
             author_name: p.author_name,
@@ -371,6 +456,36 @@ export default function DemoPage() {
     }
 
     const targetPost = matches[selectedMatchIndex].post
+
+    // 调用 candidate API 分析目标帖子
+    let candidateData = {
+      estimatedStrengths: '',
+      estimatedNeeds: '',
+      estimatedOffers: '',
+      communicationStyle: '',
+    }
+    try {
+      const candidateRes = await fetch('/api/candidate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          targetToken: targetPost.pin_id,
+          posts: [{ content: targetPost.content, author: targetPost.author_name }],
+        }),
+      })
+      const candidateJson = await candidateRes.json()
+      if (candidateJson.code === 0 && candidateJson.data) {
+        candidateData = {
+          estimatedStrengths: candidateJson.data.estimatedStrengths || '',
+          estimatedNeeds: candidateJson.data.estimatedNeeds || '',
+          estimatedOffers: candidateJson.data.estimatedOffers || '',
+          communicationStyle: candidateJson.data.communicationStyle || '',
+        }
+      }
+    } catch (e) {
+      console.error('Candidate API error:', e)
+    }
+
     try {
       // 创建协商会话
       const createRes = await fetch('/api/negotiation', {
@@ -378,6 +493,16 @@ export default function DemoPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           topic: `${targetPost.author_name} 的讨论互补分析`,
+          peerProxyData: {
+            authorName: targetPost.author_name,
+            postContent: targetPost.content,
+            ringName: targetPost.ringName,
+            topic: targetPost.topic || targetPost.title || `${targetPost.author_name} 的讨论`,
+            estimatedStrengths: candidateData.estimatedStrengths,
+            estimatedNeeds: candidateData.estimatedNeeds,
+            estimatedOffers: candidateData.estimatedOffers,
+            communicationStyle: candidateData.communicationStyle,
+          },
         }),
       })
       const createData = await createRes.json()
@@ -527,6 +652,10 @@ export default function DemoPage() {
     setCurrentStep(0)
     setIsAutoGenerating(false)
     setPollCount(0)
+    setRingPosts({})
+    setRingLoading({})
+    setRingErrors({})
+    setRingMeta({})
   }
 
   // 处理步骤切换
@@ -539,7 +668,7 @@ export default function DemoPage() {
         if (!profile) await loadProfile()
         break
       case 1: // 发现内容
-        if (posts.length === 0) await loadCircleContent()
+        if (Object.keys(ringPosts).length === 0) await loadCircleContent()
         break
       case 2: // AI 匹配
         if (matches.length === 0) await runAIMatch()
@@ -815,28 +944,78 @@ export default function DemoPage() {
         {currentStep === 1 && (
           <div className="bg-white rounded-lg shadow-sm border p-6">
             <h2 className="text-lg font-semibold mb-4">知乎圈子动态</h2>
-            <div className="space-y-4">
-              {posts.map((post) => (
-                <div key={post.pin_id} className="p-4 border rounded-lg hover:bg-gray-50">
-                  <div className="flex items-start justify-between mb-2">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      {post.ringName && (
-                        <span className={`text-xs px-2 py-0.5 rounded font-medium ${ringStyles[post.ringName]?.bg || 'bg-gray-100'} ${ringStyles[post.ringName]?.text || 'text-gray-700'}`}>
-                          {post.ringName}
+
+            {/* Dual-panel split layout */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {RING_IDS.map(ringId => {
+                const meta = ringMeta[ringId]
+                const ringPostsList = ringPosts[ringId] || []
+                const isLoading = ringLoading[ringId] ?? false
+                const error = ringErrors[ringId] || ''
+                const ringName = meta?.name || ringId
+                const styles = ringStyles[ringName] || { bg: 'bg-gray-100', text: 'text-gray-700' }
+
+                return (
+                  <div key={ringId} className="flex flex-col border rounded-lg overflow-hidden">
+                    {/* Panel header */}
+                    <div className="flex items-center justify-between px-4 py-3 bg-gray-50 border-b">
+                      <div className="flex items-center gap-2">
+                        <span className={`text-xs px-2 py-0.5 rounded font-medium ${styles.bg} ${styles.text}`}>
+                          {ringName}
                         </span>
-                      )}
-                      <span className="font-medium text-gray-900">{post.author_name}</span>
+                        {meta?.memberCount ? (
+                          <span className="text-xs text-gray-400">{meta.memberCount} 成员</span>
+                        ) : null}
+                      </div>
+                      <button
+                        onClick={() => refreshRing(ringId)}
+                        disabled={isLoading}
+                        className="text-xs text-blue-600 hover:text-blue-700 disabled:opacity-50 flex items-center gap-1"
+                      >
+                        <span className={isLoading ? 'animate-spin' : ''}>↻</span>
+                        {isLoading ? '刷新中' : '刷新'}
+                      </button>
                     </div>
-                    <span className="text-xs text-gray-400">{formatTime(post.publish_time)}</span>
+
+                    {/* Panel content */}
+                    <div className="flex-1 overflow-y-auto" style={{ maxHeight: '480px' }}>
+                      {isLoading ? (
+                        <div className="flex items-center justify-center h-32 gap-1">
+                          <div className="w-2 h-2 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+                          <div className="w-2 h-2 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+                          <div className="w-2 h-2 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+                        </div>
+                      ) : error ? (
+                        <div className="flex items-center justify-center h-32 text-sm text-red-500">
+                          {error}
+                        </div>
+                      ) : ringPostsList.length === 0 ? (
+                        <div className="flex items-center justify-center h-32 text-sm text-gray-400">
+                          该圈子暂无内容
+                        </div>
+                      ) : (
+                        <div className="divide-y">
+                          {ringPostsList.map((post) => (
+                            <div key={post.pin_id} className="p-3 hover:bg-gray-50">
+                              <div className="flex items-start justify-between mb-1">
+                                <span className="font-medium text-gray-900 text-sm">{post.author_name}</span>
+                                <span className="text-xs text-gray-400">{formatTime(post.publish_time)}</span>
+                              </div>
+                              <p className="text-sm text-gray-600 line-clamp-3">{post.content}</p>
+                              <div className="flex items-center gap-3 mt-1 text-xs text-gray-400">
+                                <span>👍 {post.like_num}</span>
+                                <span>💬 {post.comment_num}</span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                   </div>
-                  <p className="text-sm text-gray-600 line-clamp-3">{post.content}</p>
-                  <div className="flex items-center gap-4 mt-2 text-xs text-gray-400">
-                    <span>👍 {post.like_num}</span>
-                    <span>💬 {post.comment_num}</span>
-                  </div>
-                </div>
-              ))}
+                )
+              })}
             </div>
+
             <button
               onClick={() => handleStepChange(2)}
               disabled={posts.length === 0 || !!loadingStep}
@@ -952,7 +1131,7 @@ export default function DemoPage() {
                         <div className="flex-1">
                           <div className="flex items-center gap-2 mb-1">
                             <span className="text-sm font-medium">
-                              {round.speaker === 'my_agent' ? '我的 Agent' : '候选代理'}
+                              {round.speaker === 'my_agent' ? '我的 Agent' : (matches[selectedMatchIndex]?.post.author_name || '候选代理')}
                             </span>
                             <span className="text-xs text-gray-400">第 {round.roundNumber} 轮</span>
                             {streamingRounds.find(r => r.roundNumber === round.roundNumber) && (
@@ -960,12 +1139,7 @@ export default function DemoPage() {
                             )}
                           </div>
                           {round.content && (
-                            <p className="text-sm text-gray-800 mb-1 leading-relaxed">{round.content}</p>
-                          )}
-                          {round.summary && (
-                            <p className={`text-sm ${round.content ? 'text-gray-500 italic' : 'text-gray-600'}`}>
-                              {round.summary}
-                            </p>
+                            <p className="text-sm text-gray-800 leading-relaxed">{round.content}</p>
                           )}
                         </div>
                       </div>

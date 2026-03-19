@@ -292,12 +292,13 @@ ${postsSection}
         detailLevel: r.reason.detailLevel,
       }))
       .sort((a, b) => b.matchScore - a.matchScore) // 降序排列
+      .slice(0, 5) // 只返回 TOP5
 
     return NextResponse.json({
       code: 0,
       data: {
         matches,
-        total: matches.length,
+        total: 5,
       },
     })
   } catch (error) {
