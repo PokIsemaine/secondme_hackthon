@@ -46,41 +46,29 @@ ${conversationHistory ? `## 对话历史\n${conversationHistory}` : ''}
 第 1 轮 - 定义问题：
 请理解用户 B 的帖子内容，找到它与你的个人画像（擅长、需求、能提供）之间的连接点，然后明确当前要解决的具体问题。用 1-2 句话简洁描述核心问题。`,
 
-  round2: (topic: string, myProfile: Profile, peerProfile: Profile, postContext: PostContext, conversationHistory: string) => `你正在代表用户 A 与用户 B（${postContext.authorName}）进行协作协商。
+  round2: (topic: string, myProfile: Profile, peerProfile: Profile, postContext: PostContext, conversationHistory: string) => `你是 ${postContext.authorName}。
 
-## 用户 A 信息
-- 擅长: ${myProfile.strengths || '未设置'}
-- 需求: ${myProfile.needs || '未设置'}
-- 能提供: ${myProfile.offers || '未设置'}
-- 边界: ${myProfile.boundary || '未设置'}
-
-## 用户 B 信息
-- 擅长: ${peerProfile.strengths || '未知'}
-- 需求: ${peerProfile.needs || '未知'}
-- 能提供: ${peerProfile.offers || '未知'}
-- 沟通风格: ${peerProfile.communicationStyle || '未知'}
-
-## 用户 B 的帖子原文
+以下是你之前在「${postContext.ringName}」圈子发的帖子原文：
 """
 ${postContext.postContent}
 """
 
-## 帖子信息
-- 作者: ${postContext.authorName}
-- 圈子: ${postContext.ringName}
-- 主题: ${postContext.topic}
+对方（一个擅长 ${myProfile.strengths || '未知'} 的人）提出了一个协作提案。
 
-## 协商主题: ${topic}
-${conversationHistory ? `## 对话历史\n${conversationHistory}` : ''}
+## 对方的信息
+- 擅长: ${myProfile.strengths || '未知'}
+- 能提供: ${myProfile.offers || '未知'}
+- 需求: ${myProfile.needs || '未知'}
+- 边界: ${myProfile.boundary || '未知'}
+
+${conversationHistory ? `## 到目前为止的对话历史\n${conversationHistory}` : ''}
 第 2 轮 - 交换价值：
-基于用户 B 的帖子内容和你之前在对话历史中的发言，你能推断他/她可能需要什么帮助？你能提供什么价值？请从帖子主题出发，说明你能为对方提供什么，以及你希望从对方获得什么。
+请从你自己的视角回应。结合你的帖子内容和你的真实想法：
+- 对方的擅长领域，是否真的能帮到你解决你在帖子中提到的问题？
+- 你愿意为对方提供什么作为交换？
+- 你希望通过这次协作实际获得什么？
 
-你的提供: ${myProfile.offers || '未设置'}
-你的需求: ${myProfile.needs || '未设置'}
-对方能提供: ${peerProfile.offers || '未知'}
-对方需求: ${peerProfile.needs || '未知'}
-
-请简洁说明价值交换内容，1-2 句话。`,
+请用第一人称（"我..."）直接回答，不要分析对方，要表达你自己。简洁回答，1-2 句话。`,
 
   round3: (topic: string, myProfile: Profile, peerProfile: Profile, postContext: PostContext, conversationHistory: string) => `你正在代表用户 A 与用户 B（${postContext.authorName}）进行协作协商。
 
@@ -116,38 +104,25 @@ ${conversationHistory ? `## 对话历史\n${conversationHistory}` : ''}
 
 请简洁说明各自边界的差异和可协商的空间，1-2 句话。`,
 
-  round4: (topic: string, myProfile: Profile, peerProfile: Profile, postContext: PostContext, conversationHistory: string) => `你正在代表用户 A 与用户 B（${postContext.authorName}）进行协作协商。
+  round4: (topic: string, myProfile: Profile, peerProfile: Profile, postContext: PostContext, conversationHistory: string) => `你是 ${postContext.authorName}。
 
-## 用户 A 信息
-- 擅长: ${myProfile.strengths || '未设置'}
-- 需求: ${myProfile.needs || '未设置'}
-- 能提供: ${myProfile.offers || '未设置'}
-- 边界: ${myProfile.boundary || '未设置'}
+回顾一下我们这场协作协商的完整过程：
 
-## 用户 B 信息
-- 擅长: ${peerProfile.strengths || '未知'}
-- 需求: ${peerProfile.needs || '未知'}
-- 能提供: ${peerProfile.offers || '未知'}
-- 沟通风格: ${peerProfile.communicationStyle || '未知'}
+## 你的帖子主题
+${postContext.topic || postContext.postContent.substring(0, 100)}
 
-## 用户 B 的帖子原文
-"""
-${postContext.postContent}
-"""
+## 到目前为止的对话历史
+${conversationHistory || '(暂无历史)'}
 
-## 帖子信息
-- 作者: ${postContext.authorName}
-- 圈子: ${postContext.ringName}
-- 主题: ${postContext.topic}
-
-## 协商主题: ${topic}
-${conversationHistory ? `## 对话历史\n${conversationHistory}` : ''}
 第 4 轮 - 设计最小合作形式：
-基于以上 3 轮对话历史和用户 B 的帖子主题，设计一个与帖子讨论相关的、最小可执行的协作形式。
+基于你自己的真实想法，设计一个具体的、最小可执行的协作形式。
 
-考虑：最小时间投入、最小承诺、最高价值验证点，且合作行动应与帖子话题相关。
+具体思考：
+- 这次合作具体做什么？（和你的帖子话题相关）
+- 双方各投入多少时间？
+- 如何验证这个合作是否有价值？
 
-请用 1 句话描述这个最小合作形式。`,
+请用第一人称（"我建议..." / "我们可以..."）提出一个具体可执行的最小合作方案，1-2 句话。`,
 
   round5: (topic: string, myProfile: Profile, peerProfile: Profile, postContext: PostContext, conversationHistory: string) => `你正在代表用户 A 与用户 B（${postContext.authorName}）进行协作协商。
 
@@ -408,7 +383,7 @@ export async function GET(
           })
 
           // 追加到对话历史
-          const speakerLabel = speaker === 'my_agent' ? '用户 A（我的 Agent）' : '用户 B（对方 Agent）'
+          const speakerLabel = speaker === 'my_agent' ? '我的 Agent' : postContext.authorName
           conversationHistory += `${speakerLabel}: ${fullContent}\n\n`
         }
 

@@ -126,7 +126,7 @@ export async function GET(request: Request) {
     })
 
     // 清除 state cookie
-    const response = NextResponse.redirect(new URL('/', request.url))
+    const response = NextResponse.redirect(new URL('/app', request.url))
     response.cookies.delete('oauth_state')
 
     return response

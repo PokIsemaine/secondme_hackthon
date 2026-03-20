@@ -19,7 +19,12 @@
       "WebFetch(domain:minimax-algeng-chat-tts.oss-cn-wulanchabu.aliyuncs.com)",
       "Bash(DATABASE_URL=\"postgresql://postgres.rmrjmuizcyjqizmarfcx:fishingrodzsl851892190@aws-1-ap-northeast-1.pooler.supabase.com:5432/postgres\" npx prisma db push --skip-generate)",
       "Bash(npx next:*)",
-      "Bash(npx eslint:*)"
+      "Bash(npx eslint:*)",
+      "Bash(find src:*)",
+      "Skill(playwright-cli)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:3000/demo)",
+      "Bash(taskkill /F /IM node.exe)",
+      "Bash(ls *.playwright*)"
     ]
   }
 }
